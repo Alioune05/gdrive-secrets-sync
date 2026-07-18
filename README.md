@@ -17,7 +17,7 @@ up, and syncs that zip to/from a folder in your Google Drive.
 
 ## Install
 
-Requires [Go](https://go.dev/) 1.21+.
+Requires [Go](https://go.dev/) 1.26+.
 
 ```bash
 cd ~/gdrive-secrets-sync
@@ -144,6 +144,41 @@ filename.
 | `--groups`        | —                                       | all groups in the config                          |
 | `-y`, `--yes`     | —                                       | prompt before overwriting/deleting                |
 | `-h`, `--h`, `--help` | —                                   | print help and exit                               |
+
+## Architecture
+
+The code follows a small hexagonal layout inspired by the larger Go services
+in this account, so each concern is isolated and independently testable:
+
+```
+cmd/gdrive-secrets-sync   Thin entrypoint: hands os.Args + streams to the CLI.
+internal/domain           Core types (RemoteFile, UploadAction) + sentinel errors.
+internal/config           Loads/validates/scaffolds .gdrive-sync.yaml (filesystem only).
+internal/archive          Zip create/extract; overwrite decisions are injected, no console I/O.
+internal/drive            Google Drive adapter (OAuth + Drive v3); the only package that imports the Google SDK.
+internal/syncer           Usecase: orchestrates pull/push/status over the RemoteStore and Archiver ports.
+internal/cli              Argument parsing + wiring of the concrete adapters into the usecase.
+```
+
+The `syncer` usecase depends on the `RemoteStore` and `Archiver` interfaces
+rather than concrete implementations, so its full pull/push/status logic is
+exercised in tests with in-memory fakes — no network or real Google account
+required.
+
+## Development
+
+```bash
+# Run the whole test suite with the race detector and coverage:
+go test ./... -race -cover
+
+# Vet + build:
+go vet ./...
+go build ./...
+```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs gofmt, `go vet`,
+`go build`, and the race-enabled test suite with a coverage profile on every
+push to `main` and every pull request.
 
 ## Safety notes
 

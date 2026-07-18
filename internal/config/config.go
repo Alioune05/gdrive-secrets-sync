@@ -1,17 +1,25 @@
-// Package config loads and scaffolds the per-repo .gdrive-sync.yaml file.
+// Package config loads, validates, and scaffolds the per-repo
+// .gdrive-sync.yaml file. It is pure with respect to the network: everything
+// here touches only the local filesystem, which makes it straightforward to
+// test against temporary directories.
 package config
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
+	"github.com/aamoussou/gdrive-secrets-sync/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
-var configFilenames = []string{".gdrive-sync.yaml", ".gdrive-sync.yml"}
+// ConfigFilenames are the accepted config file names, in lookup order.
+var ConfigFilenames = []string{".gdrive-sync.yaml", ".gdrive-sync.yml"}
 
-const template = `# gdrive-secrets-sync config.
+// Template is the starter config written by Scaffold.
+const Template = `# gdrive-secrets-sync config.
 # Paths under each group are relative to this file's directory (your repo root).
 # Run ` + "`gdrive-secrets-sync status`" + ` after editing this to sanity-check it.
 
@@ -25,38 +33,44 @@ groups:
     - another/secret-dir/key.json
 `
 
-// DriveConfig describes where the synced zip lives in Google Drive.
-type DriveConfig struct {
+// Drive describes where the synced zip lives in Google Drive.
+type Drive struct {
 	Folder   string `yaml:"folder"`
 	Filename string `yaml:"filename"`
 }
 
-type rawConfig struct {
-	Drive  DriveConfig         `yaml:"drive"`
+type raw struct {
+	Drive  Drive               `yaml:"drive"`
 	Groups map[string][]string `yaml:"groups"`
 }
 
-// SyncConfig is the parsed, validated form of a .gdrive-sync.yaml file.
-type SyncConfig struct {
-	Path   string // the config file itself
+// Config is the parsed, validated form of a .gdrive-sync.yaml file.
+type Config struct {
+	Path   string // the config file itself (absolute)
 	Root   string // directory relative paths are resolved against
-	Drive  DriveConfig
+	Drive  Drive
 	Groups map[string][]string
 }
 
-// GroupNames returns the config's group names in a stable order.
-func (c *SyncConfig) GroupNames() []string {
+// GroupNames returns the config's group names in stable (sorted) order so
+// output and file resolution are deterministic regardless of map iteration.
+func (c *Config) GroupNames() []string {
 	names := make([]string, 0, len(c.Groups))
 	for name := range c.Groups {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 
 // ResolveFiles flattens the given group names into a deduplicated, ordered
-// list of relative file paths. Exits the process with an error message if
-// any group name is unknown.
-func (c *SyncConfig) ResolveFiles(groupNames []string) ([]string, error) {
+// list of relative file paths. If groupNames is empty, every group is used.
+// It returns an error wrapping domain.ErrUnknownGroup if any name is unknown.
+func (c *Config) ResolveFiles(groupNames []string) ([]string, error) {
+	if len(groupNames) == 0 {
+		groupNames = c.GroupNames()
+	}
+
 	var unknown []string
 	for _, g := range groupNames {
 		if _, ok := c.Groups[g]; !ok {
@@ -64,8 +78,10 @@ func (c *SyncConfig) ResolveFiles(groupNames []string) ([]string, error) {
 		}
 	}
 	if len(unknown) > 0 {
-		return nil, fmt.Errorf("unknown group(s): %s. Known groups: %s",
-			joinStrings(unknown, ", "), joinStrings(c.GroupNames(), ", "))
+		return nil, fmt.Errorf("%w: %s. Known groups: %s",
+			domain.ErrUnknownGroup,
+			strings.Join(unknown, ", "),
+			strings.Join(c.GroupNames(), ", "))
 	}
 
 	seen := map[string]bool{}
@@ -81,18 +97,8 @@ func (c *SyncConfig) ResolveFiles(groupNames []string) ([]string, error) {
 	return result, nil
 }
 
-func joinStrings(items []string, sep string) string {
-	out := ""
-	for i, s := range items {
-		if i > 0 {
-			out += sep
-		}
-		out += s
-	}
-	return out
-}
-
-// FindConfig walks upward from start (default: cwd), like git looks for .git.
+// FindConfig walks upward from start (default: cwd), like git looks for .git,
+// returning the path to the first config file found or "" if none exists.
 func FindConfig(start string) (string, error) {
 	if start == "" {
 		var err error
@@ -106,7 +112,7 @@ func FindConfig(start string) (string, error) {
 		return "", err
 	}
 	for {
-		for _, name := range configFilenames {
+		for _, name := range ConfigFilenames {
 			candidate := filepath.Join(dir, name)
 			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 				return candidate, nil
@@ -120,28 +126,31 @@ func FindConfig(start string) (string, error) {
 	}
 }
 
-// Load reads and validates a .gdrive-sync.yaml file at path.
-func Load(path string) (*SyncConfig, error) {
+// Load reads and validates a .gdrive-sync.yaml file at path. Validation
+// failures wrap domain.ErrInvalidConfig.
+func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var raw rawConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse %s: %w", path, err)
+	var r raw
+	if err := yaml.Unmarshal(data, &r); err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", domain.ErrInvalidConfig, path, err)
 	}
 
-	if raw.Drive.Folder == "" || raw.Drive.Filename == "" {
-		return nil, fmt.Errorf("%s: 'drive.folder' and 'drive.filename' are required", path)
+	if r.Drive.Folder == "" || r.Drive.Filename == "" {
+		return nil, fmt.Errorf("%w: %s: 'drive.folder' and 'drive.filename' are required",
+			domain.ErrInvalidConfig, path)
 	}
-
-	if len(raw.Groups) == 0 {
-		return nil, fmt.Errorf("%s: at least one entry under 'groups' is required", path)
+	if len(r.Groups) == 0 {
+		return nil, fmt.Errorf("%w: %s: at least one entry under 'groups' is required",
+			domain.ErrInvalidConfig, path)
 	}
-	for name, files := range raw.Groups {
+	for name, files := range r.Groups {
 		if len(files) == 0 {
-			return nil, fmt.Errorf("%s: group '%s' must be a non-empty list of file paths", path, name)
+			return nil, fmt.Errorf("%w: %s: group '%s' must be a non-empty list of file paths",
+				domain.ErrInvalidConfig, path, name)
 		}
 	}
 
@@ -150,24 +159,19 @@ func Load(path string) (*SyncConfig, error) {
 		return nil, err
 	}
 
-	return &SyncConfig{
+	return &Config{
 		Path:   absPath,
 		Root:   filepath.Dir(absPath),
-		Drive:  raw.Drive,
-		Groups: raw.Groups,
+		Drive:  r.Drive,
+		Groups: r.Groups,
 	}, nil
 }
 
-// Scaffold writes a starter config template to path, refusing to overwrite
+// Scaffold writes the starter config template to path, refusing to overwrite
 // an existing file.
 func Scaffold(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists, not overwriting", path)
 	}
-	if err := os.WriteFile(path, []byte(template), 0o644); err != nil {
-		return err
-	}
-	fmt.Printf("Wrote template config to %s.\n", path)
-	fmt.Println("Edit it, then run 'gdrive-secrets-sync status' to sanity-check it.")
-	return nil
+	return os.WriteFile(path, []byte(Template), 0o644)
 }
