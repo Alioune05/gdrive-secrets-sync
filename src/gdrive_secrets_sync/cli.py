@@ -125,6 +125,19 @@ def cmd_push(args: argparse.Namespace) -> None:
     )
     print("Push complete.")
 
+    if args.delete:
+        if not args.yes:
+            answer = input(
+                f"Delete {len(existing)} local file(s) that were just pushed? [y/N] "
+            )
+            if answer.strip().lower() != "y":
+                print("Not deleting local files.")
+                return
+        for rel in existing:
+            (cfg.root / rel).unlink()
+            print(f"Deleted {cfg.root / rel}")
+        print("Local cleanup complete.")
+
 
 def cmd_status(args: argparse.Namespace) -> None:
     cfg = _load(args)
@@ -194,7 +207,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("pull", help="Download the zip from Drive and extract the selected groups")
-    sub.add_parser("push", help="Zip the selected groups and upload/update the zip on Drive")
+    push_parser = sub.add_parser(
+        "push", help="Zip the selected groups and upload/update the zip on Drive"
+    )
+    push_parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="After a successful push, delete the local files that were uploaded "
+        "(prompts for confirmation unless -y/--yes is also passed)",
+    )
     sub.add_parser("status", help="Show what's present locally vs. on Drive")
     init_parser = sub.add_parser(
         "init", help="Scaffold a starter .gdrive-sync.yaml in the current directory"

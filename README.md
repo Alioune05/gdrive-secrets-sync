@@ -108,6 +108,12 @@ gdrive-secrets-sync pull --groups terraform android
 # otherwise updates it in place):
 gdrive-secrets-sync push
 
+# Push, then delete the local files that were just uploaded (prompts first):
+gdrive-secrets-sync push --delete
+
+# Same, without the confirmation prompt:
+gdrive-secrets-sync -y push --delete
+
 # See what's present locally vs. in the Drive zip, without downloading/uploading:
 gdrive-secrets-sync status
 
@@ -116,7 +122,8 @@ gdrive-secrets-sync --config /path/to/.gdrive-sync.yaml status
 ```
 
 `pull` prompts before overwriting a file that already exists locally, unless
-you pass `-y`/`--yes`.
+you pass `-y`/`--yes`. `push --delete` likewise prompts before deleting the
+local files it just uploaded, unless `-y`/`--yes` is passed.
 
 If a zip in Drive was created before you added structure (e.g. a flat zip
 with no subfolders), `pull` still works: it matches each zip entry to a
