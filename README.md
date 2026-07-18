@@ -17,16 +17,16 @@ up, and syncs that zip to/from a folder in your Google Drive.
 
 ## Install
 
-Requires Python 3.9+ and [pipx](https://pipx.pypa.io/).
+Requires [Go](https://go.dev/) 1.21+.
 
 ```bash
-pipx install -e ~/gdrive-secrets-sync
+cd ~/gdrive-secrets-sync
+go install ./cmd/gdrive-secrets-sync
 ```
 
-(`-e`/editable so pulling future updates to this repo takes effect immediately.
-Drop `-e` for a normal, non-editable install.)
-
-This gives you a `gdrive-secrets-sync` command on your `PATH`.
+This builds and places a `gdrive-secrets-sync` binary in `$(go env GOPATH)/bin`
+(usually `~/go/bin`) — make sure that directory is on your `PATH`. Re-run the
+same command any time you pull updates to this repo, to rebuild.
 
 ## One-time OAuth setup
 

@@ -1,11 +1,7 @@
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-*.egg-info/
-build/
-dist/
+# Go
+/gdrive-secrets-sync
+/bin/
+*.exe
 
 # Never commit OAuth secrets/tokens or zips, even if misplaced here.
 credentials.json
