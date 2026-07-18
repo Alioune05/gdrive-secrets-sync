@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gdrive-secrets-sync"
+version = "0.1.0"
+description = "Sync git-ignored local secret files with a zip stored in a Google Drive folder, driven by a per-repo YAML config."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Alioune Amoussou" }]
+dependencies = [
+    "google-api-python-client>=2.130.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.0",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+gdrive-secrets-sync = "gdrive_secrets_sync.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gdrive_secrets_sync"]

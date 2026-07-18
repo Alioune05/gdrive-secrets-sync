@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Never commit OAuth secrets/tokens or zips, even if misplaced here.
+credentials.json
+token.json
+*.zip
+
+# macOS
+.DS_Store
