@@ -119,6 +119,10 @@ gdrive-secrets-sync status
 
 # Point explicitly at a config instead of relying on auto-discovery:
 gdrive-secrets-sync --config /path/to/.gdrive-sync.yaml status
+
+# Print help (any of -h / --h / --help, before or after a command):
+gdrive-secrets-sync -h
+gdrive-secrets-sync pull --h
 ```
 
 `pull` prompts before overwriting a file that already exists locally, unless
@@ -138,6 +142,8 @@ filename.
 | `--credentials`   | `GDRIVE_SECRETS_SYNC_CREDENTIALS`      | `~/.config/gdrive-secrets-sync/credentials.json`  |
 | `--token`         | `GDRIVE_SECRETS_SYNC_TOKEN`            | `~/.config/gdrive-secrets-sync/token.json`        |
 | `--groups`        | —                                       | all groups in the config                          |
+| `-y`, `--yes`     | —                                       | prompt before overwriting/deleting                |
+| `-h`, `--h`, `--help` | —                                   | print help and exit                               |
 
 ## Safety notes
 

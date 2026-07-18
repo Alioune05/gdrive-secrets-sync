@@ -18,7 +18,7 @@ import (
 
 const usage = `usage: gdrive-secrets-sync [--config PATH] [--credentials PATH]
                             [--token PATH] [--groups GROUP [GROUP ...]]
-                            [-y] {pull,push,status,init} ...
+                            [-y] [-h] {pull,push,status,init} ...
 
 Sync git-ignored local secret files with a zip stored in a Google Drive
 folder, driven by a per-repo .gdrive-sync.yaml config.
@@ -39,6 +39,8 @@ global flags:
                          (env: GDRIVE_SECRETS_SYNC_TOKEN)
   --groups GROUP...     Which groups to sync (default: all groups)
   -y, --yes             Don't prompt for confirmation
+  -h, --h, --help       Show this help and exit (works before or after a
+                         command, e.g. 'gdrive-secrets-sync pull -h')
 
 push flags:
   --delete    After a successful push, delete the local files that were
@@ -110,7 +112,7 @@ func parseGlobalFlags(args []string) (*globalFlags, string, []string, error) {
 			i--
 		case a == "-y" || a == "--yes":
 			g.yes = true
-		case a == "-h" || a == "--help":
+		case isHelpFlag(a):
 			fmt.Print(usage)
 			os.Exit(0)
 		case strings.HasPrefix(a, "-"):
@@ -128,12 +130,37 @@ func fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
+// isHelpFlag reports whether arg is one of the accepted help flags.
+func isHelpFlag(arg string) bool {
+	return arg == "-h" || arg == "--h" || arg == "--help"
+}
+
+// wantsHelp reports whether any of args is a help flag, so subcommands can
+// print usage and exit even after the command token (e.g. `pull -h`).
+func wantsHelp(args []string) bool {
+	for _, a := range args {
+		if isHelpFlag(a) {
+			return true
+		}
+	}
+	return false
+}
+
+func printUsageAndExit() {
+	fmt.Print(usage)
+	os.Exit(0)
+}
+
 func main() {
 	g, command, rest, err := parseGlobalFlags(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(1)
+	}
+
+	if wantsHelp(rest) {
+		printUsageAndExit()
 	}
 
 	switch command {
